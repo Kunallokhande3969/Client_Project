@@ -64,6 +64,9 @@ import {
   markStudentAsViewed
 } from "../../store/slices/clientsSlice";
 
+
+
+
 const CounselorDashboard = () => {
   const dispatch = useDispatch();
 
@@ -305,7 +308,7 @@ const CounselorDashboard = () => {
     try {
       dispatch(setDashboardLoading(true));
       const res = await fetch(
-        "http://localhost:5000/api/clients/stats/domain",
+        "https://client-project-24ff.onrender.com/api/clients/stats/domain",
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -346,7 +349,7 @@ const CounselorDashboard = () => {
     try {
       console.log("📡 Fetching courses for domain:", domain);
       const res = await fetch(
-        `http://localhost:5000/api/clients/stats/course/${domain}`,
+        `https://client-project-24ff.onrender.com/api/clients/stats/course/${domain}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -376,7 +379,7 @@ const CounselorDashboard = () => {
       dispatch(setClientsLoading(true));
       
       const res = await fetch(
-        `http://localhost:5000/api/clients/course/${encodeURIComponent(courseName)}`,
+        `https://client-project-24ff.onrender.com/api/clients/course/${encodeURIComponent(courseName)}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -408,7 +411,7 @@ const CounselorDashboard = () => {
   const markDomainAsViewed = async (domainName) => {
     try {
       const res = await fetch(
-        `http://localhost:5000/api/clients/domain/viewed/${domainName}`,
+        `https://client-project-24ff.onrender.com/api/clients/domain/viewed/${domainName}`,
         {
           method: "PATCH",
           headers: {
@@ -428,7 +431,7 @@ const CounselorDashboard = () => {
   const markCourseAsViewed = async (courseName) => {
     try {
       const res = await fetch(
-        `http://localhost:5000/api/clients/course/viewed/${encodeURIComponent(courseName)}`,
+        `https://client-project-24ff.onrender.com/api/clients/course/viewed/${encodeURIComponent(courseName)}`,
         {
           method: "PATCH",
           headers: {
@@ -450,7 +453,7 @@ const CounselorDashboard = () => {
   const markStudentAsViewedHandler = async (clientId) => {
     try {
       const res = await fetch(
-        `http://localhost:5000/api/clients/student/viewed/${clientId}`,
+        `https://client-project-24ff.onrender.com/api/clients/student/viewed/${clientId}`,
         {
           method: "PATCH",
           headers: {
@@ -523,7 +526,7 @@ const CounselorDashboard = () => {
   const deleteClient = async (clientId) => {
     try {
       dispatch(setIsDeleting(true));
-      const res = await fetch(`http://localhost:5000/api/clients/${clientId}`, {
+      const res = await fetch(`https://client-project-24ff.onrender.com/api/clients/${clientId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -561,7 +564,7 @@ const CounselorDashboard = () => {
       console.log("🔄 Updating client status:", clientId, newStatus);
       
       const res = await fetch(
-        `http://localhost:5000/api/clients/${clientId}/status`,
+        `https://client-project-24ff.onrender.com/api/clients/${clientId}/status`,
         {
           method: "PATCH",
           headers: {
@@ -601,7 +604,7 @@ const CounselorDashboard = () => {
   const exportToExcel = async () => {
     try {
       dispatch(setExporting(true));
-      const res = await fetch("http://localhost:5000/api/clients/export", {
+      const res = await fetch("https://client-project-24ff.onrender.com/api/clients/export", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
         },
@@ -693,7 +696,7 @@ const CounselorDashboard = () => {
     dispatch(setClientsLoading(true));
     try {
       const res = await fetch(
-        `http://localhost:5000/api/clients/filter?filterField=status&filterValue=${status}`,
+        `https://client-project-24ff.onrender.com/api/clients/filter?filterField=status&filterValue=${status}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,

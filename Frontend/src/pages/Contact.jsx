@@ -358,7 +358,7 @@ const handleSubmit = async (e) => {
 
   try {
     // 🔥 FIX 1: Sahi URL - backend ka port 5000
-    const response = await fetch("http://localhost:5000/api/clients", {
+    const response = await fetch("https://client-project-24ff.onrender.com/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
