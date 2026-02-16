@@ -11,12 +11,21 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-redux'],
-          socket: ['socket.io-client']
+          'socket.io-client': ['socket.io-client']
         }
       }
     }
   },
   optimizeDeps: {
-    include: ['socket.io-client', 'react', 'react-dom', 'react-redux']
+    include: ['socket.io-client', 'react', 'react-dom', 'react-redux'],
+    esbuildOptions: {
+      target: 'es2020'
+    }
+  },
+  ssr: {
+    noExternal: ['socket.io-client']
+  },
+  define: {
+    global: 'globalThis'
   }
 })
