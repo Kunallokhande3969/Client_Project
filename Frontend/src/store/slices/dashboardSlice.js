@@ -87,7 +87,8 @@ export const {
   setDeleteModal,
   setIsDeleting,
   clearSelectedData,
-  setDashboardInitialized 
+  // setDashboardInitialized 
+    setDashboardInitialized 
 } = dashboardSlice.actions;
 
 export default dashboardSlice.reducer;
