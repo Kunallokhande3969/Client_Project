@@ -1,0 +1,24 @@
+[
+  {
+    "timestamp": "2026-02-06T06:43:50.541Z",
+    "type": "CORPORATE_DISPATCH",
+    "company": "HerStudent",
+    "referenceId": "HS60225331",
+    "client": "kunal lokhande",
+    "email": "kunallokhande3969@gmail.com",
+    "region": "Mumbai",
+    "messageId": "<7f56bf10-2f08-a9b1-605d-26eed4c573a4@gmail.com>",
+    "status": "dispatched"
+  },
+  {
+    "timestamp": "2026-02-06T07:25:28.286Z",
+    "type": "CORPORATE_DISPATCH",
+    "company": "HerStudent",
+    "referenceId": "HS62723279",
+    "client": "kunal lokhande",
+    "email": "kunallokhande3969@gmail.com",
+    "region": "Mumbai",
+    "messageId": "<c83417b5-8f3b-8218-b04b-32a1f3222d0f@gmail.com>",
+    "status": "dispatched"
+  }
+]

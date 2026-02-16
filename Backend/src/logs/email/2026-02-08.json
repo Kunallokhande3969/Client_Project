@@ -1,0 +1,34 @@
+[
+  {
+    "timestamp": "2026-02-08T18:25:11.826Z",
+    "type": "SENT",
+    "userEmail": "kunallokhande3969@gmail.com",
+    "userName": "Kunal Lokhande",
+    "messageId": "<d28d6ddd-1558-6687-9880-89d614ce6636@gmail.com>",
+    "response": "250 2.0.0 OK  1770537299 d2e1a72fcca58-8244166f269sm7570427b3a.7 - gsmtp"
+  },
+  {
+    "timestamp": "2026-02-08T18:29:27.724Z",
+    "type": "SENT",
+    "userEmail": "kunallokhande3969@gmail.com",
+    "userName": "Kunal Lokhande",
+    "messageId": "<dd5ef098-6248-1e18-5b02-9ba9289d18e9@gmail.com>",
+    "response": "250 2.0.0 OK  1770537555 d9443c01a7336-2a951c50211sm72387435ad.5 - gsmtp"
+  },
+  {
+    "timestamp": "2:05:33 pm",
+    "type": "SENT",
+    "userEmail": "kunallokhande3969@gmail.com",
+    "userName": "Kunal Lokhande",
+    "messageId": "<dcc64496-635d-16a3-3b29-3519daa6a03b@gmail.com>",
+    "duration": "118025ms"
+  },
+  {
+    "timestamp": "2:09:41 pm",
+    "type": "SENT",
+    "userEmail": "mahimalokhande61@gmail.com",
+    "userName": "Kunal Lokhande",
+    "messageId": "<d36d8d16-cabe-8cb3-9307-6ead7a47b505@gmail.com>",
+    "duration": "128012ms"
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "10:02:02 pm",
+    "type": "FAILED",
+    "userEmail": "mahimalokhande61@gmail.com",
+    "userName": "Mahima",
+    "error": "Invalid login: 535-5.7.8 Username and Password not accepted. For more information, go to\n535 5.7.8  https://support.google.com/mail/?p=BadCredentials d9443c01a7336-2ab2996661dsm28766575ad.42 - gsmtp",
+    "code": "EAUTH",
+    "duration": "1778ms"
+  },
+  {
+    "timestamp": "10:09:57 pm",
+    "type": "FAILED",
+    "userEmail": "mahimalokhande61@gmail.com",
+    "userName": "mahi",
+    "error": "Invalid login: 535-5.7.8 Username and Password not accepted. For more information, go to\n535 5.7.8  https://support.google.com/mail/?p=BadCredentials d2e1a72fcca58-8249e12f1e2sm2232944b3a.0 - gsmtp",
+    "code": "EAUTH",
+    "duration": "1996ms"
+  }
+]

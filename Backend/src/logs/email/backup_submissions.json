@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": "2026-02-09T04:15:02.280Z",
+    "userEmail": "kunallokhande3969@gmail.com",
+    "userName": "Kunal Lokhande",
+    "mobileNumber": "+919165828041",
+    "city": "Not specified",
+    "problem": "fgd",
+    "status": "pending_email"
+  },
+  {
+    "timestamp": "2026-02-09T08:24:13.213Z",
+    "userEmail": "kunallokhande3969@gmail.com",
+    "userName": "Kunal Lokhande",
+    "mobileNumber": "+919165828041",
+    "city": "Pune",
+    "problem": "vdsimsdumgu",
+    "status": "pending_email"
+  },
+  {
+    "timestamp": "2026-02-12T03:02:02.787Z",
+    "userEmail": "mahimalokhande61@gmail.com",
+    "userName": "Mahima",
+    "mobileNumber": "+91 6262382937",
+    "city": "Betul",
+    "problem": "nahi aata samjh kuch",
+    "status": "pending_email"
+  },
+  {
+    "timestamp": "2026-02-12T03:09:57.837Z",
+    "userEmail": "mahimalokhande61@gmail.com",
+    "userName": "mahi",
+    "mobileNumber": "+91 6262382937",
+    "city": "Betul",
+    "problem": "language difficult",
+    "status": "pending_email"
+  }
+]
