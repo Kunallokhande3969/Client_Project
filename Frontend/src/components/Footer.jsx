@@ -11,6 +11,8 @@ import {
   Twitter,
 } from "lucide-react";
 
+import React from "react"; 
+
 const Footer = () => {
   const quickLinks = [
     { name: "Home", path: "/" },

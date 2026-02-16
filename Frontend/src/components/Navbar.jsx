@@ -14,6 +14,8 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 
+import React from "react";  
+
 // Counselor Login Modal
 const CounselorLoginModal = ({ isOpen, onClose, onLogin }) => {
   const [formData, setFormData] = useState({

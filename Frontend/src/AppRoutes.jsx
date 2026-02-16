@@ -1,3 +1,4 @@
+import React from "react";  // 👈 YEH LINE ADD KARO
 import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
