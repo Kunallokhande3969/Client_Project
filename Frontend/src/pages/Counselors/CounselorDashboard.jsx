@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { toast } from "react-toastify";
 import {
@@ -36,7 +36,7 @@ import {
 import ScrollToTop from "../../components/ScrollToTop";
 
 // Redux Actions Import
-import { setProfile, logout } from "../../store/slices/counselorSlice";
+import { setProfile, logout } from "../store/slices/counselorSlice";
 import {
   setCurrentView,
   setDomainStats,
@@ -50,39 +50,42 @@ import {
   setDeleteModal,
   setIsDeleting,
   clearSelectedData,
-} from "../../store/slices/dashboardSlice";
+  setDashboardInitialized
+} from "../store/slices/dashboardSlice";
 import {
   setClients,
   setSelectedClient,
   setClientsLoading,
   updateClientInList,
   removeClientFromList,
-  markStudentAsViewed,
-} from "../../store/slices/clientsSlice";
+  markStudentAsViewed
+} from "../store/slices/clientsSlice";
 
 const CounselorDashboard = () => {
   const dispatch = useDispatch();
 
-  
+  // ========== REDUX STATE SELECTORS ==========
   const counselorProfile = useSelector((state) => state.counselor.profile);
-  const {
-    currentView,
-    domainStats,
-    overallStats,
-    courseStats,
-    selectedDomain,
-    selectedCourse,
-    domainCourses,
-    loading,
-    exporting,
-    deleteModal,
+  const { 
+    currentView, 
+    domainStats, 
+    overallStats, 
+    courseStats, 
+    selectedDomain, 
+    selectedCourse, 
+    domainCourses, 
+    loading, 
+    exporting, 
+    deleteModal, 
     isDeleting,
+    isInitialized 
   } = useSelector((state) => state.dashboard);
-  const { clients, selectedClient, clientsLoading, filters } = useSelector(
-    (state) => state.clients,
-  );
+  const { clients, selectedClient, clientsLoading, filters } = useSelector((state) => state.clients);
 
-  
+  // ========== LOCAL STATE ==========
+  const [initialLoad, setInitialLoad] = useState(true);
+
+  // ========== DOMAIN DATA ==========
   const counselorDomains = [
     {
       id: 1,
@@ -233,23 +236,26 @@ const CounselorDashboard = () => {
         },
       );
       const data = await res.json();
+      
       if (data.success) {
+        // DONO ek saath update karo - NO FLICKER
         dispatch(setDomainStats(data.domainStats || []));
-        dispatch(
-          setOverallStats(
-            data.overallStats || {
-              total: 0,
-              new: 0,
-              inProgress: 0,
-              completed: 0,
-            },
-          ),
-        );
+        dispatch(setOverallStats(
+          data.overallStats || {
+            total: 0,
+            new: 0,
+            inProgress: 0,
+            completed: 0,
+          },
+        ));
+        // Mark as initialized - data aa gaya
+        dispatch(setDashboardInitialized());
       }
     } catch (err) {
       console.error("Failed to fetch domain stats:", err);
     } finally {
       dispatch(setDashboardLoading(false));
+      setInitialLoad(false);
     }
   };
 
@@ -360,7 +366,7 @@ const CounselorDashboard = () => {
     dispatch(setClientsLoading(true));
     try {
       const res = await fetch(
-        `http://https://counceller-project-2.vercel.app/api/clients/course/${encodeURIComponent(course.course)}`,
+        `https://counceller-project-2.vercel.app/api/clients/course/${encodeURIComponent(course.course)}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -390,9 +396,7 @@ const CounselorDashboard = () => {
       await markStudentAsViewedHandler(client._id);
     }
 
-    dispatch(
-      setSelectedClient({ ...client, studentViewed: true, isNew: false }),
-    );
+    dispatch(setSelectedClient({ ...client, studentViewed: true, isNew: false }));
     dispatch(setCurrentView("clientDetail"));
   };
 
@@ -434,7 +438,7 @@ const CounselorDashboard = () => {
   const updateClientStatus = async (clientId, newStatus) => {
     try {
       const res = await fetch(
-        `http://https://counceller-project-2.vercel.app/api/clients/${clientId}/status`,
+        `https://counceller-project-2.vercel.app/api/clients/${clientId}/status`,
         {
           method: "PATCH",
           headers: {
@@ -463,7 +467,7 @@ const CounselorDashboard = () => {
   const exportToExcel = async () => {
     try {
       dispatch(setExporting(true));
-      const res = await fetch("http://https://counceller-project-2.vercel.app/api/clients/export", {
+      const res = await fetch("https://counceller-project-2.vercel.app/api/clients/export", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
         },
@@ -570,181 +574,226 @@ const CounselorDashboard = () => {
     }
   };
 
-  const renderDashboard = () => (
-    <div>
-      <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 mb-10 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-800/20 rounded-full -translate-y-32 translate-x-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-800/20 rounded-full translate-y-24 -translate-x-24"></div>
-
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-          <div className="max-w-2xl">
-            <h1 className="text-4xl font-black mb-4">
-              Welcome back, {counselorProfile?.name}!
-            </h1>
-            <p className="text-blue-200 text-lg">
-              Manage {overallStats.total} students across {domainStats.length}{" "}
-              domains.
-              {overallStats.new > 0 && (
-                <span className="ml-2 bg-gradient-to-r from-pink-600 to-red-500 px-3 py-1 rounded-full text-sm font-bold">
-                  {overallStats.new} NEW STUDENTS
-                </span>
-              )}
-            </p>
+  // ========== RENDER SKELETON LOADING ==========
+  const renderSkeletonCards = () => {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <div
+            key={i}
+            className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse"
+          >
+            <div className="h-14 w-14 bg-slate-200 rounded-xl mb-5"></div>
+            <div className="h-6 bg-slate-200 rounded mb-2 w-3/4"></div>
+            <div className="h-4 bg-slate-200 rounded mb-8 w-1/2"></div>
+            <div className="h-10 bg-slate-200 rounded"></div>
           </div>
-          <div className="flex flex-col items-end gap-3">
-            <button
-              onClick={exportToExcel}
-              disabled={exporting || overallStats.total === 0}
-              className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-xl flex items-center gap-3 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed border border-emerald-600"
-            >
-              {exporting ? (
-                <>
-                  <RefreshCcw size={18} className="animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <FileSpreadsheet size={18} />
-                  Get All Students data
-                </>
-              )}
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                <Database size={28} className="text-white" />
-              </div>
-              <div>
-                <div className="text-2xl font-black">{overallStats.total}</div>
-                <div className="text-sm text-blue-200">Total Students</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
+    );
+  };
 
-      {/* STATUS SUMMARY CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <div
-          onClick={() => handleFilterByStatus("new")}
-          className="bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-2xl p-6 cursor-pointer hover:shadow-xl hover:border-blue-300 transition-all duration-300 group relative"
-        >
-          {overallStats.new > 0 && (
-            <div className="absolute -top-2 -right-2">
-              <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-1">
-                <Sparkles size={10} />
-                NEW
+  // ========== RENDER DASHBOARD ==========
+  const renderDashboard = () => {
+    // Jab tak data initialize nahi hota, skeleton dikhao
+    if (!isInitialized) {
+      return (
+        <div>
+          {/* Header Skeleton */}
+          <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 mb-10 text-white shadow-2xl relative overflow-hidden">
+            <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+              <div className="max-w-2xl">
+                <div className="h-10 w-64 bg-white/20 rounded mb-4 animate-pulse"></div>
+                <div className="h-6 w-96 bg-white/20 rounded animate-pulse"></div>
               </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-black text-blue-700 mb-1">
-                {overallStats.new || 0}
+              <div className="flex flex-col items-end gap-3">
+                <div className="h-12 w-48 bg-white/20 rounded-xl animate-pulse"></div>
               </div>
-              <div className="text-blue-600 font-semibold mb-1">
-                New Students
-              </div>
-              <div className="text-sm text-blue-500">Require attention</div>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-              <Clock size={24} className="text-blue-600" />
             </div>
           </div>
-        </div>
 
-        <div
-          onClick={() => handleFilterByStatus("in-progress")}
-          className="bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-2xl p-6 cursor-pointer hover:shadow-xl hover:border-amber-300 transition-all duration-300 group"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-black text-amber-700 mb-1">
-                {overallStats.inProgress || 0}
-              </div>
-              <div className="text-amber-600 font-semibold mb-1">
-                In Progress
-              </div>
-              <div className="text-sm text-amber-500">Active counseling</div>
-            </div>
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center group-hover:bg-amber-200 transition-colors">
-              <RefreshCcw size={24} className="text-amber-600" />
-            </div>
-          </div>
-        </div>
-
-        <div
-          onClick={() => handleFilterByStatus("completed")}
-          className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 rounded-2xl p-6 cursor-pointer hover:shadow-xl hover:border-emerald-300 transition-all duration-300 group"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-black text-emerald-700 mb-1">
-                {overallStats.completed || 0}
-              </div>
-              <div className="text-emerald-600 font-semibold mb-1">
-                Completed
-              </div>
-              <div className="text-sm text-emerald-500">
-                Finished counseling
-              </div>
-            </div>
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-              <CheckCircle size={24} className="text-emerald-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-100 rounded-2xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-black text-slate-700 mb-1">
-                {overallStats.total || 0}
-              </div>
-              <div className="text-slate-600 font-semibold mb-1">
-                Total Students
-              </div>
-              <div className="text-sm text-slate-500">Across all domains</div>
-            </div>
-            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-              <TrendingUp size={24} className="text-slate-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* DOMAIN CARDS */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-black text-slate-800 mb-2">
-              Specialization Domains
-            </h2>
-            <p className="text-slate-500">
-              Select a domain to explore courses and students
-            </p>
-          </div>
-          <div className="text-sm text-slate-500 bg-slate-100 px-4 py-2 rounded-xl">
-            {loading ? "Loading..." : `${domainStats.length} domains available`}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <div
-                key={i}
-                className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse"
-              >
-                <div className="h-14 w-14 bg-slate-200 rounded-xl mb-5"></div>
-                <div className="h-6 bg-slate-200 rounded mb-2"></div>
-                <div className="h-4 bg-slate-200 rounded mb-8"></div>
-                <div className="h-10 bg-slate-200 rounded"></div>
+          {/* Status Cards Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse">
+                <div className="flex items-center justify-between">
+                  <div className="w-full">
+                    <div className="h-8 w-16 bg-slate-200 rounded mb-2"></div>
+                    <div className="h-4 w-24 bg-slate-200 rounded"></div>
+                  </div>
+                  <div className="w-12 h-12 bg-slate-200 rounded-xl"></div>
+                </div>
               </div>
             ))}
           </div>
-        ) : (
+
+          {/* Domain Cards Skeleton */}
+          {renderSkeletonCards()}
+        </div>
+      );
+    }
+
+    // Data aa chuka hai - stable UI dikhao
+    return (
+      <div>
+        <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 mb-10 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-800/20 rounded-full -translate-y-32 translate-x-32"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-800/20 rounded-full translate-y-24 -translate-x-24"></div>
+
+          <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+            <div className="max-w-2xl">
+              <h1 className="text-4xl font-black mb-4">
+                Welcome back, {counselorProfile?.name}!
+              </h1>
+              <p className="text-blue-200 text-lg">
+                Manage {overallStats.total} students across {domainStats.length}{" "}
+                domains.
+                {overallStats.new > 0 && (
+                  <span className="ml-2 bg-gradient-to-r from-pink-600 to-red-500 px-3 py-1 rounded-full text-sm font-bold">
+                    {overallStats.new} NEW STUDENTS
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-3">
+              <button
+                onClick={exportToExcel}
+                disabled={exporting || overallStats.total === 0}
+                className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-xl flex items-center gap-3 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed border border-emerald-600"
+              >
+                {exporting ? (
+                  <>
+                    <RefreshCcw size={18} className="animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet size={18} />
+                    Get All Students data
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                  <Database size={28} className="text-white" />
+                </div>
+                <div>
+                  <div className="text-2xl font-black">{overallStats.total}</div>
+                  <div className="text-sm text-blue-200">Total Students</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* STATUS SUMMARY CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+          <div
+            onClick={() => handleFilterByStatus("new")}
+            className="bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-2xl p-6 cursor-pointer hover:shadow-xl hover:border-blue-300 transition-all duration-300 group relative"
+          >
+            {overallStats.new > 0 && (
+              <div className="absolute -top-2 -right-2">
+                <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-1">
+                  <Sparkles size={10} />
+                  NEW
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-black text-blue-700 mb-1">
+                  {overallStats.new || 0}
+                </div>
+                <div className="text-blue-600 font-semibold mb-1">
+                  New Students
+                </div>
+                <div className="text-sm text-blue-500">Require attention</div>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                <Clock size={24} className="text-blue-600" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            onClick={() => handleFilterByStatus("in-progress")}
+            className="bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-2xl p-6 cursor-pointer hover:shadow-xl hover:border-amber-300 transition-all duration-300 group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-black text-amber-700 mb-1">
+                  {overallStats.inProgress || 0}
+                </div>
+                <div className="text-amber-600 font-semibold mb-1">
+                  In Progress
+                </div>
+                <div className="text-sm text-amber-500">Active counseling</div>
+              </div>
+              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                <RefreshCcw size={24} className="text-amber-600" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            onClick={() => handleFilterByStatus("completed")}
+            className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 rounded-2xl p-6 cursor-pointer hover:shadow-xl hover:border-emerald-300 transition-all duration-300 group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-black text-emerald-700 mb-1">
+                  {overallStats.completed || 0}
+                </div>
+                <div className="text-emerald-600 font-semibold mb-1">
+                  Completed
+                </div>
+                <div className="text-sm text-emerald-500">
+                  Finished counseling
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                <CheckCircle size={24} className="text-emerald-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-100 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-black text-slate-700 mb-1">
+                  {overallStats.total || 0}
+                </div>
+                <div className="text-slate-600 font-semibold mb-1">
+                  Total Students
+                </div>
+                <div className="text-sm text-slate-500">Across all domains</div>
+              </div>
+              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+                <TrendingUp size={24} className="text-slate-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* DOMAIN CARDS */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-black text-slate-800 mb-2">
+                Specialization Domains
+              </h2>
+              <p className="text-slate-500">
+                Select a domain to explore courses and students
+              </p>
+            </div>
+            <div className="text-sm text-slate-500 bg-slate-100 px-4 py-2 rounded-xl">
+              {loading ? "Loading..." : `${domainStats.length} domains available`}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {domainStats.map((domain) => {
               const domainInfo = counselorDomains.find(
@@ -805,10 +854,10 @@ const CounselorDashboard = () => {
               );
             })}
           </div>
-        )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderDomainCourses = () => (
     <div>

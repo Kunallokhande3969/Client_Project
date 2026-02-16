@@ -16,7 +16,9 @@ const initialState = {
   loading: false,
   exporting: false,
   deleteModal: null,
-  isDeleting: false
+  isDeleting: false,
+  isInitialized: false,
+  lastUpdated: null
 };
 
 const dashboardSlice = createSlice({
@@ -61,9 +63,16 @@ const dashboardSlice = createSlice({
       state.selectedCourse = null;
       state.courseStats = [];
       state.domainCourses = [];
+    },
+
+    setDashboardInitialized: (state) => {
+      state.isInitialized = true;
+      state.lastUpdated = Date.now();
+      state.loading = false;
     }
   }
 });
+
 
 export const {
   setCurrentView,
@@ -77,7 +86,8 @@ export const {
   setExporting,
   setDeleteModal,
   setIsDeleting,
-  clearSelectedData
+  clearSelectedData,
+  setDashboardInitialized 
 } = dashboardSlice.actions;
 
 export default dashboardSlice.reducer;
