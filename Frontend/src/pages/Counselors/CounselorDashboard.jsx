@@ -34,9 +34,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import ScrollToTop from "../../components/ScrollToTop";
+import socket from '../../socket';
 
-// Redux Actions Import
-import { setProfile, logout } from "../store/slices/counselorSlice";
+import { setProfile, logout } from "../../store/slices/counselorSlice";
 import {
   setCurrentView,
   setDomainStats,
@@ -50,8 +50,11 @@ import {
   setDeleteModal,
   setIsDeleting,
   clearSelectedData,
-  setDashboardInitialized
-} from "../store/slices/dashboardSlice";
+  setDashboardInitialized,
+  setRealTimeConnected,
+  updateDashboardStats,
+  setRetryCount
+} from "../../store/slices/dashboardSlice";
 import {
   setClients,
   setSelectedClient,
@@ -59,7 +62,7 @@ import {
   updateClientInList,
   removeClientFromList,
   markStudentAsViewed
-} from "../store/slices/clientsSlice";
+} from "../../store/slices/clientsSlice";
 
 const CounselorDashboard = () => {
   const dispatch = useDispatch();
@@ -78,12 +81,15 @@ const CounselorDashboard = () => {
     exporting, 
     deleteModal, 
     isDeleting,
-    isInitialized 
+    isInitialized,
+    realTimeConnected,
+    retryCount
   } = useSelector((state) => state.dashboard);
   const { clients, selectedClient, clientsLoading, filters } = useSelector((state) => state.clients);
 
   // ========== LOCAL STATE ==========
   const [initialLoad, setInitialLoad] = useState(true);
+  const [renderReady, setRenderReady] = useState(false);
 
   // ========== DOMAIN DATA ==========
   const counselorDomains = [
@@ -210,6 +216,77 @@ const CounselorDashboard = () => {
     EDUCATION: ["B.Ed", "D.El.Ed", "M.Ed", "CTET / STET Guidance"],
   };
 
+  // ========== SOCKET CONNECTION FOR REAL-TIME ==========
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.on('connect', () => {
+      console.log('✅ Real-time connected');
+      dispatch(setRealTimeConnected(true));
+      dispatch(setRetryCount(0));
+      toast.success('🟢 Live updates active', { autoClose: 2000 });
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('🔴 Real-time disconnected:', reason);
+      dispatch(setRealTimeConnected(false));
+      
+      if (reason === 'io server disconnect') {
+        setTimeout(() => socket.connect(), 1000);
+      }
+    });
+
+    socket.on('connect_error', (error) => {
+      console.log('⚠️ Connection error:', error.message);
+      dispatch(setRetryCount(retryCount + 1));
+    });
+
+    socket.on('stats-updated', (newStats) => {
+      console.log('📊 Real-time stats update received');
+      dispatch(updateDashboardStats(newStats));
+      
+      if (newStats.overallStats?.new > overallStats?.new) {
+        toast.info('✨ New student added!', { autoClose: 2000 });
+      }
+    });
+
+    socket.on('new-student', (student) => {
+      toast.success(`🎉 ${student.fullName} just registered!`);
+    });
+
+    socket.on('student-updated', () => {
+      toast.info('📝 Student information updated');
+    });
+
+    socket.on('student-deleted', () => {
+      toast.warning('🗑️ A student record was removed');
+    });
+
+    socket.on('initial-stats', (stats) => {
+      console.log('📊 Initial stats received from socket');
+      dispatch(updateDashboardStats(stats));
+      dispatch(setDashboardInitialized());
+      setRenderReady(true);
+    });
+
+    if (socket.connected && !isInitialized) {
+      socket.emit('request-stats');
+    }
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
+      socket.off('stats-updated');
+      socket.off('new-student');
+      socket.off('student-updated');
+      socket.off('student-deleted');
+      socket.off('initial-stats');
+    };
+  }, [dispatch, isInitialized, overallStats?.new, retryCount]);
+
   // ========== INITIALIZE ==========
   useEffect(() => {
     const savedProfile = localStorage.getItem("counselorProfile");
@@ -228,17 +305,22 @@ const CounselorDashboard = () => {
     try {
       dispatch(setDashboardLoading(true));
       const res = await fetch(
-        "https://counceller-project-2.vercel.app/api/clients/stats/domain",
+        "http://localhost:5000/api/clients/stats/domain",
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
           },
         },
       );
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
       const data = await res.json();
+      console.log("📥 Domain stats response:", data);
       
       if (data.success) {
-        // DONO ek saath update karo - NO FLICKER
         dispatch(setDomainStats(data.domainStats || []));
         dispatch(setOverallStats(
           data.overallStats || {
@@ -248,11 +330,12 @@ const CounselorDashboard = () => {
             completed: 0,
           },
         ));
-        // Mark as initialized - data aa gaya
         dispatch(setDashboardInitialized());
+        setRenderReady(true);
       }
     } catch (err) {
-      console.error("Failed to fetch domain stats:", err);
+      console.error("❌ Failed to fetch domain stats:", err);
+      toast.error("Failed to load dashboard data");
     } finally {
       dispatch(setDashboardLoading(false));
       setInitialLoad(false);
@@ -261,27 +344,71 @@ const CounselorDashboard = () => {
 
   const fetchCourseStats = async (domain) => {
     try {
+      console.log("📡 Fetching courses for domain:", domain);
       const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/stats/course/${domain}`,
+        `http://localhost:5000/api/clients/stats/course/${domain}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
           },
         },
       );
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
       const data = await res.json();
+      console.log("📥 Course stats response:", data);
+      
       if (data.success) {
         dispatch(setCourseStats(data.courseStats || []));
       }
     } catch (err) {
-      console.error("Failed to fetch course stats:", err);
+      console.error("❌ Failed to fetch course stats:", err);
+      toast.error("Failed to load course data");
+    }
+  };
+
+  const fetchClientsByCourse = async (courseName) => {
+    try {
+      console.log("📡 Fetching clients for course:", courseName);
+      dispatch(setClientsLoading(true));
+      
+      const res = await fetch(
+        `http://localhost:5000/api/clients/course/${encodeURIComponent(courseName)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      console.log("📥 Clients response:", data);
+
+      const sortedClients = (data.data || []).sort((a, b) => {
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      dispatch(setClients(sortedClients));
+      dispatch(setCurrentView("clients"));
+    } catch (err) {
+      console.error("❌ Failed to fetch clients:", err);
+      toast.error("Failed to load clients data");
+    } finally {
+      dispatch(setClientsLoading(false));
     }
   };
 
   const markDomainAsViewed = async (domainName) => {
     try {
       const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/domain/viewed/${domainName}`,
+        `http://localhost:5000/api/clients/domain/viewed/${domainName}`,
         {
           method: "PATCH",
           headers: {
@@ -301,7 +428,7 @@ const CounselorDashboard = () => {
   const markCourseAsViewed = async (courseName) => {
     try {
       const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/course/viewed/${encodeURIComponent(courseName)}`,
+        `http://localhost:5000/api/clients/course/viewed/${encodeURIComponent(courseName)}`,
         {
           method: "PATCH",
           headers: {
@@ -323,7 +450,7 @@ const CounselorDashboard = () => {
   const markStudentAsViewedHandler = async (clientId) => {
     try {
       const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/student/viewed/${clientId}`,
+        `http://localhost:5000/api/clients/student/viewed/${clientId}`,
         {
           method: "PATCH",
           headers: {
@@ -341,57 +468,50 @@ const CounselorDashboard = () => {
   };
 
   const handleDomainClick = async (domain) => {
+    console.log("👉 Domain clicked:", domain);
+    
     if (domain.hasNew) {
+      console.log("🆕 Marking domain as viewed:", domain.domain);
       await markDomainAsViewed(domain.domain);
     }
 
-    const domainInfo =
-      counselorDomains.find((d) => d.name === domain.domain) ||
-      counselorDomains[0];
+    const domainInfo = counselorDomains.find((d) => d.name === domain._id || d.name === domain.domain);
+    console.log("📌 Domain info:", domainInfo);
+    
+    if (!domainInfo) {
+      console.error("❌ Domain info not found for:", domain);
+      toast.error("Domain information not found");
+      return;
+    }
+    
     dispatch(setSelectedDomain({ ...domainInfo, stats: domain }));
 
     const courses = DOMAIN_COURSES_MAP[domainInfo.name] || [];
+    console.log("📚 Courses for domain:", courses);
     dispatch(setDomainCourses(courses));
 
+    console.log("📊 Fetching course stats for:", domainInfo.name);
     await fetchCourseStats(domainInfo.name);
+    
+    console.log("🔄 Changing view to domainCourses");
     dispatch(setCurrentView("domainCourses"));
   };
 
   const handleCourseClick = async (course) => {
+    console.log("👉 Course clicked:", course);
+    
     if (course.hasNew) {
+      console.log("🆕 Marking course as viewed:", course.course);
       await markCourseAsViewed(course.course);
     }
 
     dispatch(setSelectedCourse(course));
-    dispatch(setClientsLoading(true));
-    try {
-      const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/course/${encodeURIComponent(course.course)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
-          },
-        },
-      );
-
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-      const data = await res.json();
-
-      const sortedClients = (data.data || []).sort((a, b) => {
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      });
-
-      dispatch(setClients(sortedClients));
-      dispatch(setCurrentView("clients"));
-    } catch (err) {
-      console.error("Failed to fetch clients:", err);
-      alert("Failed to load clients data");
-    } finally {
-      dispatch(setClientsLoading(false));
-    }
+    await fetchClientsByCourse(course.course || course._id);
   };
 
   const handleClientClick = async (client) => {
+    console.log("👉 Client clicked:", client);
+    
     if (client.isNew && !client.studentViewed) {
       await markStudentAsViewedHandler(client._id);
     }
@@ -403,7 +523,7 @@ const CounselorDashboard = () => {
   const deleteClient = async (clientId) => {
     try {
       dispatch(setIsDeleting(true));
-      const res = await fetch(`https://counceller-project-2.vercel.app/api/clients/${clientId}`, {
+      const res = await fetch(`http://localhost:5000/api/clients/${clientId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -413,6 +533,7 @@ const CounselorDashboard = () => {
       if (res.ok) {
         dispatch(removeClientFromList(clientId));
         dispatch(setDeleteModal(null));
+        toast.success("Client deleted successfully ✅");
 
         fetchDomainStats();
         if (selectedDomain) {
@@ -422,14 +543,14 @@ const CounselorDashboard = () => {
         if (clients.length === 1) {
           handleBackToCourses();
         }
-
-        toast.success("Client deleted successfully ✅");
       } else {
+        const error = await res.text();
+        console.error("Delete error response:", error);
         toast.error("Failed to delete client ❌");
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete client");
+      toast.error("Failed to delete client");
     } finally {
       dispatch(setIsDeleting(false));
     }
@@ -437,8 +558,10 @@ const CounselorDashboard = () => {
 
   const updateClientStatus = async (clientId, newStatus) => {
     try {
+      console.log("🔄 Updating client status:", clientId, newStatus);
+      
       const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/${clientId}/status`,
+        `http://localhost:5000/api/clients/${clientId}/status`,
         {
           method: "PATCH",
           headers: {
@@ -450,24 +573,35 @@ const CounselorDashboard = () => {
       );
 
       if (res.ok) {
-        dispatch(updateClientInList({ ...selectedClient, status: newStatus }));
+        const data = await res.json();
+        console.log("✅ Status update response:", data);
+        
+        dispatch(updateClientInList(data.client));
+        if (selectedClient?._id === clientId) {
+          dispatch(setSelectedClient(data.client));
+        }
+        
         fetchDomainStats();
         if (selectedDomain) {
           fetchCourseStats(selectedDomain.name);
         }
-        toast.success("Client status updated 🔄");
+        
+        toast.success(`Status updated to ${newStatus} 🔄`);
       } else {
+        const error = await res.text();
+        console.error("Status update error:", error);
         toast.error("Failed to update status ❌");
       }
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast.error("Failed to update status");
     }
   };
 
   const exportToExcel = async () => {
     try {
       dispatch(setExporting(true));
-      const res = await fetch("https://counceller-project-2.vercel.app/api/clients/export", {
+      const res = await fetch("http://localhost:5000/api/clients/export", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
         },
@@ -484,9 +618,11 @@ const CounselorDashboard = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      
+      toast.success("Export successful!");
     } catch (err) {
       console.error("Export error:", err);
-      alert("Failed to export data");
+      toast.error("Failed to export data");
     } finally {
       dispatch(setExporting(false));
     }
@@ -541,7 +677,6 @@ const CounselorDashboard = () => {
     );
   };
 
-  // Check if student is new (within last 7 days and not viewed)
   const isStudentNew = (student) => {
     if (!student.newAt) return false;
     if (student.studentViewed) return false;
@@ -558,7 +693,7 @@ const CounselorDashboard = () => {
     dispatch(setClientsLoading(true));
     try {
       const res = await fetch(
-        `https://counceller-project-2.vercel.app/api/clients/filter?filterField=status&filterValue=${status}`,
+        `http://localhost:5000/api/clients/filter?filterField=status&filterValue=${status}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("counselorToken") || ""}`,
@@ -569,12 +704,12 @@ const CounselorDashboard = () => {
       dispatch(setClients(data.data || []));
     } catch (err) {
       console.error(err);
+      toast.error("Failed to filter clients");
     } finally {
       dispatch(setClientsLoading(false));
     }
   };
 
-  // ========== RENDER SKELETON LOADING ==========
   const renderSkeletonCards = () => {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -593,13 +728,10 @@ const CounselorDashboard = () => {
     );
   };
 
-  // ========== RENDER DASHBOARD ==========
   const renderDashboard = () => {
-    // Jab tak data initialize nahi hota, skeleton dikhao
-    if (!isInitialized) {
+    if (!isInitialized || !renderReady) {
       return (
         <div>
-          {/* Header Skeleton */}
           <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 mb-10 text-white shadow-2xl relative overflow-hidden">
             <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-8">
               <div className="max-w-2xl">
@@ -612,7 +744,6 @@ const CounselorDashboard = () => {
             </div>
           </div>
 
-          {/* Status Cards Skeleton */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse">
@@ -627,15 +758,31 @@ const CounselorDashboard = () => {
             ))}
           </div>
 
-          {/* Domain Cards Skeleton */}
           {renderSkeletonCards()}
         </div>
       );
     }
 
-    // Data aa chuka hai - stable UI dikhao
     return (
-      <div>
+      <div className="relative">
+        <div className="absolute top-4 right-4 flex items-center gap-2 z-50">
+          <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+            realTimeConnected 
+              ? 'bg-green-100 text-green-700 border border-green-300' 
+              : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${
+              realTimeConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'
+            }`}></span>
+            {realTimeConnected ? 'Live Updates' : 'Connecting...'}
+          </div>
+          {retryCount > 0 && !realTimeConnected && (
+            <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-600">
+              Retry {retryCount}/10
+            </div>
+          )}
+        </div>
+
         <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 mb-10 text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-800/20 rounded-full -translate-y-32 translate-x-32"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-800/20 rounded-full translate-y-24 -translate-x-24"></div>
@@ -687,7 +834,6 @@ const CounselorDashboard = () => {
           </div>
         </div>
 
-        {/* STATUS SUMMARY CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <div
             onClick={() => handleFilterByStatus("new")}
@@ -778,7 +924,6 @@ const CounselorDashboard = () => {
           </div>
         </div>
 
-        {/* DOMAIN CARDS */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -797,18 +942,17 @@ const CounselorDashboard = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {domainStats.map((domain) => {
               const domainInfo = counselorDomains.find(
-                (d) => d.name === domain.domain,
+                (d) => d.name === domain._id || d.name === domain.domain,
               );
               const Icon = domainInfo?.icon || Stethoscope;
 
               return (
                 <div
-                  key={domain.domain}
+                  key={domain._id || domain.domain}
                   onClick={() => handleDomainClick(domain)}
                   className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-xl hover:border-blue-300 cursor-pointer relative transition-all duration-300 group"
                 >
-                  {/* NEW BADGE FOR DOMAIN */}
-                  {domain.hasNew && (
+                  {domain.new > 0 && (
                     <div className="absolute -top-2 -right-2 z-10">
                       <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-1">
                         <Sparkles size={10} />
@@ -825,14 +969,14 @@ const CounselorDashboard = () => {
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-black text-slate-800">
-                        {domain.total}
+                        {domain.total || 0}
                       </div>
                       <div className="text-xs text-slate-500">Students</div>
                     </div>
                   </div>
 
                   <h3 className="text-xl font-bold text-slate-800 mb-2">
-                    {domain.domain}
+                    {domain._id || domain.domain}
                   </h3>
                   <p className="text-sm text-slate-600 mb-4">
                     {domainInfo?.description || "Professional domain"}
@@ -846,7 +990,7 @@ const CounselorDashboard = () => {
                         className="group-hover:translate-x-1 transition-transform"
                       />
                     </div>
-                    {domain.hasNew && (
+                    {domain.new > 0 && (
                       <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
                     )}
                   </div>
@@ -859,114 +1003,116 @@ const CounselorDashboard = () => {
     );
   };
 
-  const renderDomainCourses = () => (
-    <div>
-      <ScrollToTop />
-      {/* HEADER */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleBackToDashboard}
-            className="p-3 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
-          >
-            <ChevronLeft size={22} />
-          </button>
-          <div>
-            <h2 className="text-3xl font-black text-slate-800 mb-2">
-              {selectedDomain?.name} Courses
-            </h2>
-            <p className="text-slate-500">
-              Select a course to view enrolled students
-            </p>
+  const renderDomainCourses = () => {
+    if (!selectedDomain) {
+      return <div>Loading...</div>;
+    }
+
+    return (
+      <div>
+        <ScrollToTop />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleBackToDashboard}
+              className="p-3 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <div>
+              <h2 className="text-3xl font-black text-slate-800 mb-2">
+                {selectedDomain?.name} Courses
+              </h2>
+              <p className="text-slate-500">
+                Select a course to view enrolled students
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-100 px-4 py-2.5 rounded-xl">
+            <Home size={16} />
+            <span
+              className="hover:text-blue-600 cursor-pointer"
+              onClick={handleBackToDashboard}
+            >
+              Dashboard
+            </span>
+            <ChevronRight size={16} />
+            <span className="font-semibold text-blue-600">
+              {selectedDomain?.name}
+            </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-100 px-4 py-2.5 rounded-xl">
-          <Home size={16} />
-          <span
-            className="hover:text-blue-600 cursor-pointer"
-            onClick={handleBackToDashboard}
-          >
-            Dashboard
-          </span>
-          <ChevronRight size={16} />
-          <span className="font-semibold text-blue-600">
-            {selectedDomain?.name}
-          </span>
-        </div>
-      </div>
 
-      {/* COURSE CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {courseStats.length > 0 ? (
-          courseStats.map((course, index) => (
-            <div
-              key={index}
-              onClick={() => handleCourseClick(course)}
-              className="bg-white rounded-2xl border border-slate-200 p-7 shadow-sm hover:shadow-xl hover:border-blue-400 cursor-pointer group relative transition-all duration-300"
-            >
-              {/* NEW BADGE FOR COURSE */}
-              {course.hasNew && (
-                <div className="absolute -top-2 -right-2 z-10">
-                  <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-1">
-                    <Sparkles size={10} />
-                    NEW
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {courseStats.length > 0 ? (
+            courseStats.map((course, index) => (
+              <div
+                key={index}
+                onClick={() => handleCourseClick(course)}
+                className="bg-white rounded-2xl border border-slate-200 p-7 shadow-sm hover:shadow-xl hover:border-blue-400 cursor-pointer group relative transition-all duration-300"
+              >
+                {course.new > 0 && (
+                  <div className="absolute -top-2 -right-2 z-10">
+                    <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-1">
+                      <Sparkles size={10} />
+                      NEW
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                    <BookOpen size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-700">
+                      {course.course || course._id}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {selectedDomain?.name} Domain
+                    </p>
                   </div>
                 </div>
-              )}
 
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                  <BookOpen size={22} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-700">
-                    {course.course}
-                  </h3>
-                  <p className="text-sm text-slate-500">
-                    {selectedDomain?.name} Domain
-                  </p>
+                <div className="flex items-center justify-between pt-5 border-t border-slate-100">
+                  <div className="text-sm text-slate-600">
+                    {course.total || 0} student{(course.total || 0) !== 1 ? "s" : ""}
+                    {course.new > 0 && (
+                      <span className="ml-2 text-red-500 font-semibold">
+                        • {course.new} new
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-blue-600 font-semibold flex items-center gap-1 group-hover:text-blue-700">
+                    View Students
+                    <ArrowRight
+                      size={18}
+                      className="group-hover:translate-x-1 transition-transform"
+                    />
+                  </div>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between pt-5 border-t border-slate-100">
-                <div className="text-sm text-slate-600">
-                  {course.total} student{course.total !== 1 ? "s" : ""}
-                  {course.hasNew && (
-                    <span className="ml-2 text-red-500 font-semibold">
-                      • {course.new} new
-                    </span>
-                  )}
-                </div>
-                <div className="text-blue-600 font-semibold flex items-center gap-1 group-hover:text-blue-700">
-                  View Students
-                  <ArrowRight
-                    size={18}
-                    className="group-hover:translate-x-1 transition-transform"
-                  />
-                </div>
+            ))
+          ) : (
+            <div className="col-span-3 text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <BookOpen size={32} className="text-slate-300" />
               </div>
+              <h3 className="text-xl font-bold text-slate-400 mb-2">
+                No courses found
+              </h3>
+              <p className="text-slate-400">
+                No students enrolled in courses for {selectedDomain?.name}
+              </p>
             </div>
-          ))
-        ) : (
-          <div className="col-span-3 text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <BookOpen size={32} className="text-slate-300" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-400 mb-2">
-              No courses found
-            </h3>
-            <p className="text-slate-400">
-              No students enrolled in courses for {selectedDomain?.name}
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderClients = () => (
     <div>
-      {/* HEADER */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-4">
           <button
@@ -982,7 +1128,7 @@ const CounselorDashboard = () => {
           <div>
             <h2 className="text-3xl font-black text-slate-800 mb-2">
               {selectedCourse
-                ? `${selectedCourse.course} Students`
+                ? `${selectedCourse.course || selectedCourse._id} Students`
                 : selectedDomain?.name || "Students"}
             </h2>
             <p className="text-slate-500">{clients.length} students found</p>
@@ -1009,7 +1155,7 @@ const CounselorDashboard = () => {
             </>
           )}
           <span className="font-semibold text-blue-600">
-            {selectedCourse ? selectedCourse.course : selectedDomain?.name}
+            {selectedCourse ? selectedCourse.course || selectedCourse._id : selectedDomain?.name}
           </span>
         </div>
       </div>
@@ -1033,7 +1179,6 @@ const CounselorDashboard = () => {
                 className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-xl hover:border-blue-300 cursor-pointer transition-all duration-300 group relative"
               >
                 <ScrollToTop />
-                {/* NEW BADGE FOR STUDENT */}
                 {isNewStudent && (
                   <div className="absolute -top-2 -right-2 z-10">
                     <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-1">
@@ -1043,7 +1188,6 @@ const CounselorDashboard = () => {
                   </div>
                 )}
 
-                {/* CARD HEADER */}
                 <div className="flex items-start justify-between mb-5">
                   <div className="flex items-center gap-4">
                     <div className="relative">
@@ -1074,7 +1218,6 @@ const CounselorDashboard = () => {
                   </button>
                 </div>
 
-                {/* CLIENT INFO */}
                 <div className="space-y-3 mb-6">
                   <div className="flex items-center gap-3 text-sm">
                     <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1107,7 +1250,6 @@ const CounselorDashboard = () => {
                   </div>
                 </div>
 
-                {/* STATUS & ACTION */}
                 <div className="pt-5 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1152,7 +1294,7 @@ const CounselorDashboard = () => {
           </h3>
           <p className="text-slate-400">
             {selectedCourse
-              ? `No students are enrolled in ${selectedCourse.course} course`
+              ? `No students are enrolled in ${selectedCourse.course || selectedCourse._id} course`
               : "No students found"}
           </p>
         </div>
@@ -1168,7 +1310,6 @@ const CounselorDashboard = () => {
     return (
       <div>
         <ScrollToTop />
-        {/* HEADER */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
           <div className="flex items-center gap-4">
             <button
@@ -1212,7 +1353,7 @@ const CounselorDashboard = () => {
                   className="hover:text-blue-600 cursor-pointer"
                   onClick={handleBackToCourses}
                 >
-                  {selectedCourse.course}
+                  {selectedCourse.course || selectedCourse._id}
                 </span>
                 <ChevronRight size={16} />
               </>
@@ -1500,7 +1641,6 @@ const CounselorDashboard = () => {
 
       {deleteModal && renderDeleteModal()}
 
-      {/* FOOTER */}
       <div className="border-t border-slate-200 bg-white py-8">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between text-slate-500 text-sm gap-4">

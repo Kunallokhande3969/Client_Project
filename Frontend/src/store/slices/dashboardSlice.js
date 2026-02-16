@@ -18,7 +18,9 @@ const initialState = {
   deleteModal: null,
   isDeleting: false,
   isInitialized: false,
-  lastUpdated: null
+  lastUpdated: null,
+  realTimeConnected: false,
+  retryCount: 0
 };
 
 const dashboardSlice = createSlice({
@@ -64,15 +66,32 @@ const dashboardSlice = createSlice({
       state.courseStats = [];
       state.domainCourses = [];
     },
-
     setDashboardInitialized: (state) => {
       state.isInitialized = true;
       state.lastUpdated = Date.now();
       state.loading = false;
+    },
+    setRealTimeConnected: (state, action) => {
+      state.realTimeConnected = action.payload;
+    },
+    updateDashboardStats: (state, action) => {
+      const { domainStats, overallStats } = action.payload;
+      if (domainStats) {
+        state.domainStats = domainStats;
+      }
+      if (overallStats) {
+        state.overallStats = overallStats;
+      }
+      state.lastUpdated = Date.now();
+      if (!state.isInitialized) {
+        state.isInitialized = true;
+      }
+    },
+    setRetryCount: (state, action) => {
+      state.retryCount = action.payload;
     }
   }
 });
-
 
 export const {
   setCurrentView,
@@ -87,8 +106,10 @@ export const {
   setDeleteModal,
   setIsDeleting,
   clearSelectedData,
-  // setDashboardInitialized 
-    setDashboardInitialized 
+  setDashboardInitialized,
+  setRealTimeConnected,
+  updateDashboardStats,
+  setRetryCount
 } = dashboardSlice.actions;
 
 export default dashboardSlice.reducer;

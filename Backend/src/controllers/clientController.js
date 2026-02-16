@@ -347,68 +347,6 @@ exports.markStudentAsViewed = async (req, res) => {
   }
 };
 
-/* ===============================
-   GET DOMAIN STATS WITH NEW COUNT
-================================ */
-exports.getDomainStats = async (req, res) => {
-  try {
-    const domains = [
-      "MEDICAL", "PHARMACY", "NURSING", "PARAMEDICAL",
-      "ENGINEERING", "MANAGEMENT", "GRADUATION", 
-      "POST GRADUATION", "VOCATIONAL", "LANGUAGES",
-      "AGRICULTURE", "EDUCATION"
-    ];
-
-    const stats = [];
-    
-    for (const domain of domains) {
-      const total = await Client.countDocuments({ domain });
-      const newCount = await Client.countDocuments({ 
-        domain, 
-        domainViewed: false,
-        newAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days
-      });
-      const inProgress = await Client.countDocuments({ domain, status: 'in-progress' });
-      const completed = await Client.countDocuments({ domain, status: 'completed' });
-      
-      stats.push({
-        domain,
-        total,
-        new: newCount,
-        inProgress,
-        completed,
-        hasNew: newCount > 0
-      });
-    }
-
-    // Overall stats
-    const totalStudents = await Client.countDocuments();
-    const totalNew = await Client.countDocuments({ 
-      domainViewed: false,
-      newAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-    });
-    const totalInProgress = await Client.countDocuments({ status: 'in-progress' });
-    const totalCompleted = await Client.countDocuments({ status: 'completed' });
-
-    res.status(200).json({
-      success: true,
-      domainStats: stats,
-      overallStats: {
-        total: totalStudents,
-        new: totalNew,
-        inProgress: totalInProgress,
-        completed: totalCompleted
-      }
-    });
-
-  } catch (error) {
-    console.error("Domain stats error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
-  }
-};
 
 /* ===============================
    GET COURSE STATS WITH NEW COUNT
@@ -753,9 +691,7 @@ exports.getUnviewedCounts = async (req, res) => {
   }
 };
 
-/* ===============================
-   AUTO MARK OLD AS VIEWED (CRON JOB)
-================================ */
+
 exports.autoMarkOldAsViewed = async (req, res) => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -793,5 +729,60 @@ exports.autoMarkOldAsViewed = async (req, res) => {
       success: false,
       message: "Server error"
     });
+  }
+};
+
+
+
+
+
+exports.getDomainStats = async (req, res) => {
+  try {
+    const Client = require("../models/Client");
+    
+    const stats = await Client.aggregate([
+      {
+        $group: {
+          _id: "$domain",
+          total: { $sum: 1 },
+          new: {
+            $sum: {
+              $cond: [
+                { 
+                  $and: [
+                    { $eq: ["$isNew", true] },
+                    { $eq: ["$studentViewed", false] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          inProgress: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0]
+            }
+          },
+          completed: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "completed"] }, 1, 0]
+            }
+          }
+        }
+      }
+    ]);
+
+    const overallStats = {
+      total: stats.reduce((acc, curr) => acc + (curr.total || 0), 0),
+      new: stats.reduce((acc, curr) => acc + (curr.new || 0), 0),
+      inProgress: stats.reduce((acc, curr) => acc + (curr.inProgress || 0), 0),
+      completed: stats.reduce((acc, curr) => acc + (curr.completed || 0), 0)
+    };
+
+    res.json({ success: true, domainStats: stats, overallStats });
+  } catch (error) {
+    console.error("Error getting domain stats:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

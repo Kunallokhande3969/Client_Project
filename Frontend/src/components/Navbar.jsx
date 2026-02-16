@@ -30,7 +30,7 @@ const CounselorLoginModal = ({ isOpen, onClose, onLogin }) => {
     setError("");
 
     try {
-      const res = await fetch("https://counceller-project-2.vercel.app/api/counselor/login", {
+      const res = await fetch("http://localhost:5173/api/counselor/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -275,7 +275,7 @@ const Navbar = () => {
       const token = localStorage.getItem("counselorToken");
 
       if (token) {
-        await fetch("https://counceller-project-2.vercel.app/api/counselor/logout", {
+        await fetch("http://localhost:5173/api/counselor/logout", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

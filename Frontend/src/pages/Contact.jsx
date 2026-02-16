@@ -340,68 +340,86 @@ const Contact = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (formData.phone.length < 8) {
-      toast.error("Please enter a valid phone number (minimum 8 digits).");
-      return;
+  if (formData.phone.length < 8) {
+    toast.error("Please enter a valid phone number (minimum 8 digits).");
+    return;
+  }
+
+  if (!formData.eduLevel || !formData.domain || !formData.course) {
+    toast.warning("Please fill all required academic fields.");
+    return;
+  }
+
+  setIsLoading(true);
+  const loadingToastId = toast.loading("Submitting your form...");
+
+  try {
+    // 🔥 FIX 1: Sahi URL - backend ka port 5000
+    const response = await fetch("http://localhost:5000/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...formData,
+        phone: `${formData.countryCode} ${formData.phone}`,
+      }),
+    });
+
+    // 🔥 FIX 2: Pehle response ko text mein lo
+    const responseText = await response.text();
+    console.log("Raw response:", responseText);
+
+    // 🔥 FIX 3: Agar response empty hai to
+    if (!responseText || responseText.trim() === "") {
+      throw new Error("Server returned empty response");
     }
 
-    if (!formData.eduLevel || !formData.domain || !formData.course) {
-      toast.warning("Please fill all required academic fields.");
-      return;
-    }
-
-    setIsLoading(true);
-    const loadingToastId = toast.loading("Submitting your form...");
-
+    // 🔥 FIX 4: JSON parse try karo
+    let data;
     try {
-      const response = await fetch("https://counceller-project-2.vercel.app/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          phone: `${formData.countryCode} ${formData.phone}`,
-        }),
-      });
-
-      toast.dismiss(loadingToastId);
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Something went wrong");
-      }
-
-      setIsSubmitted(true);
-      setFormData({
-        fullName: "",
-        email: "",
-        countryCode: "+91",
-        phone: "",
-        dob: "",
-        age: "",
-        country: "",
-        state: "",
-        city: "",
-        eduLevel: "",
-        domain: "",
-        course: "",
-        message: "",
-      });
-
-      toast.success("Form submitted successfully! Our team will contact you soon.");
-
-      setTimeout(() => setIsSubmitted(false), 5000);
-    } catch (error) {
-      console.error("Form submit error:", error);
-      toast.error(
-        error.message || "Submission failed. Please try again later.",
-      );
-    } finally {
-      setIsLoading(false);
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      throw new Error("Invalid response from server");
     }
-  };
+
+    toast.dismiss(loadingToastId);
+
+    if (!response.ok) {
+      throw new Error(data.message || "Something went wrong");
+    }
+
+    // Success
+    setIsSubmitted(true);
+    setFormData({
+      fullName: "",
+      email: "",
+      countryCode: "+91",
+      phone: "",
+      dob: "",
+      age: "",
+      country: "",
+      state: "",
+      city: "",
+      eduLevel: "",
+      domain: "",
+      course: "",
+      message: "",
+    });
+
+    toast.success("Form submitted successfully! Our team will contact you soon.");
+    setTimeout(() => setIsSubmitted(false), 5000);
+
+  } catch (error) {
+    console.error("Form submit error:", error);
+    toast.dismiss(loadingToastId);
+    toast.error(error.message || "Submission failed. Please try again later.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const openWhatsApp = () => {
     const message = `Hello SS Admission Wala, I'm interested in career counseling.`;

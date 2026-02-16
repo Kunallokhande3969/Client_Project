@@ -1,27 +1,69 @@
 require("dotenv").config();
-const app = require("./src/app");
-const morgan = require("morgan");
-const connectDB = require("./src/config/db"); 
+const express = require("express");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const clientRoutes = require("./src/routes/clientRoutes");
+const counselorRoutes = require("./src/routes/counselorRoutes");
 
-const PORT = process.env.PORT || 5000;
+const app = express();
+const httpServer = createServer(app);
+
+// CORS for local development
+const corsOptions = {
+  origin: ["http://localhost:5173", "http://localhost:5174"],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// Socket.IO for local
+const io = new Server(httpServer, {
+  cors: corsOptions,
+  transports: ['websocket', 'polling'],
+  path: '/socket.io/'
+});
+
+app.set('io', io);
+
+// MongoDB Connection (local or Atlas)
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/counselordb");
+    console.log('✅ MongoDB Connected Locally');
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err);
+  }
+};
+
+// Routes
+app.use("/api/clients", clientRoutes);
+app.use("/api/counselor", counselorRoutes);
+
+// Test route
+app.get("/", (req, res) => {
+  res.json({ message: "Server is running locally", socket: "active" });
+});
+
+// Socket test connection
+io.on('connection', (socket) => {
+  console.log('📡 Client connected locally:', socket.id);
+  
+  socket.on('disconnect', () => {
+    console.log('📡 Client disconnected:', socket.id);
+  });
+});
 
 connectDB();
 
-app.use(morgan(":method :url :status :response-time ms - :date[clf]"));
-
-// Start server
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 5000;
+httpServer.listen(PORT, () => {
   console.log(`
-   Server started successfully!
-  URL: http://localhost:${PORT}
-  
-   MongoDB Connected!
-   Counselor Login: POST http://localhost:${PORT}/api/counselor/login
-  
-   Login Credentials:
-     Email: counselor@company.com
-     Password:Counselor@123#Secure
-  
-   Test with: GET http://localhost:${PORT}
+   🚀 Local server running!
+   📍 URL: http://localhost:${PORT}
+   🔌 WebSocket: Active
   `);
 });

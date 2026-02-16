@@ -1,7 +1,9 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-  profile: null,
+  profile: localStorage.getItem('counselorProfile') 
+    ? JSON.parse(localStorage.getItem('counselorProfile')) 
+    : null,
   token: localStorage.getItem('counselorToken') || null,
   loading: false,
   error: null
