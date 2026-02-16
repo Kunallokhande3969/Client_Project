@@ -357,7 +357,7 @@ const Contact = () => {
     const loadingToastId = toast.loading("Submitting your form...");
 
     try {
-      const response = await fetch("http://localhost:5000/api/clients", {
+      const response = await fetch("https://counceller-project-2.vercel.app/api/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
