@@ -7,6 +7,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     rollupOptions: {
+      external: [], // Empty array - koi module external nahi
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-redux'],
@@ -14,5 +15,8 @@ export default defineConfig({
         }
       }
     }
+  },
+  optimizeDeps: {
+    include: ['socket.io-client'] 
   }
-})  
+})
